@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<script type="text/javascript" src="d3.js"></script> 
+        <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous"> -->
+		<style type="text/css">
+            /* I wanted a nicer font */
+            @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;600&display=swap');
+            body {
+                font-family: 'Open Sans', sans-serif;
+            }
+		</style>
+	</head>
+	<body style="margin:2%">
+		<div style="width:40%; height:620px; float:left;">
+			<div style="height:44%; top:0%;">
+				<h1>What were my Spotify listening trends in 2021?</h1>
+				<p>Select a month and week to begin.</p>
+				<input id="month" type="range" min="0" max="11" step="1" value="0" style="width:100%">
+				<p style="text-align: justify; font-size: 12px;">jan feb mar apr may jun jul aug sep oct nov dec<span style="display:inline-block; width:100%"></span></p>
+				<div style="text-align: center; font-size: 14px;">
+					<input type="radio" checked name="week" value="0"><label for="0"><b>Week 1</b></label>
+					<input type="radio" name="week" value="1"><label for="1"><b>Week 2</b></label>
+					<input type="radio" name="week" value="2"><label for="2"><b>Week 3</b></label>
+					<input type="radio" name="week" value="3"><label for="3"><b>Week 4</b></label>
+				</div>
+			</div>
+			<div id="spotify-embed" style="height:56%; top:44%;">
+			</div>
+		</div>
+		<div style="width:55%; height:620px; float:right;">
+			<div id="timeline" style="height:33%; top:0%;"></div>
+			<div style="height:28%; top:33%;">
+				<div id="genre-pie" style="width:50%; height:100%; float:left;"></div>
+				<div id="explicit-pie" style="width:50%; height:100%; float:right;"></div>
+			</div>
+			<div id="mood-heatmap" style="height:39%; top:51%;"></div>
+		</div>
+		<script type="text/javascript">
+
+			let months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+			let weeks = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii"];
+			
+			d3.csv("spotify_data.csv").then((data)=> {
+				// Create timeline barchart =========================================
+				let timeline_h = 180
+				let timeline_w = 630
+				let timeline_p = 30
+				let timeline = d3.select("#timeline")
+								.append("svg")
+								.attr("height", timeline_h)
+								.attr("width", timeline_w);
+				// Create explicit piechart =========================================
+				let pie_h = 180
+				let pie_w = 300
+				let pie_p = 30	
+				let pie_r = Math.min(pie_h, pie_w) / 2 - pie_p
+				let pie_explicit = d3.select("#explicit-pie")
+										.append("svg")
+											.attr("height", pie_h)
+											.attr("width", pie_w)
+										.append("g")
+											.attr("class", "arcs")
+											.attr("transform", "translate(50,15)");
+
+				// Create genre piechart =========================================	
+				let pie_genre = d3.select("#genre-pie")
+										.append("svg")
+											.attr("height", pie_h)
+											.attr("width", pie_w)
+										.append("g")
+											.attr("class", "arcs")
+											.attr("transform", "translate(80,30)");
+				// Create valence/tempo heatmap =========================================	
+				// console.log("valence", d3.min(data, (d)=> {return parseFloat(d.track_valence)}), d3.max(data, (d)=> {return parseFloat(d.track_valence)}))
+				// console.log("tempo", d3.min(data, (d)=> {return parseFloat(d.track_tempo)}), d3.max(data, (d)=> {return parseFloat(d.track_tempo)}))
+				let heatmap_h = 220
+				let heatmap_w = 630
+				let heatmap_plr = 40
+				let heatmap_ptb = 40
+				let heatmap = d3.select("#mood-heatmap")
+								.append("svg")
+									.attr("height", heatmap_h)
+									.attr("width", heatmap_w)
+								.append("g")
+									.attr("class", "heatmap")
+									.attr("transform", "translate(30,0)");
+
+				// Create update functions =========================================
+				d3.selectAll("input").on("change", function() {
+
+					// Filter new data ------------------------------------
+					let month = d3.select("#month").node().value;
+					let week = d3.selectAll("input[name='week']:checked").node().value;
+					let data_filtered = data.filter((d)=> { return d.playlist_month == months[month] && d.playlist_week == weeks[week] })
+					// console.log(data_filtered)
+
+					// Clear old data ------------------------------------
+					d3.selectAll("rect").remove()
+					d3.selectAll("path").remove()
+					d3.selectAll(".label").remove()
+					d3.selectAll(".axis").remove()
+					d3.selectAll("text").remove()
+
+					// New Spotify embed ------------------------------------
+					d3.select("#spotify-embed").html('<iframe src="https://open.spotify.com/embed/playlist/' + data_filtered[0]["playlist_id"] + '?utm_source=generator" width="100%" height="320" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>');
+
+					// Generate explicit pie chart data ------------------------------------
+					explicit_true = data_filtered.filter((d)=> { return d.track_explicit == "True" }).length;
+					explicit_false = data_filtered.filter((d)=> { return d.track_explicit == "False" }).length;
+
+					// Generate genre pie chart data ------------------------------------
+					let genres = {}
+					for (track of data_filtered) {
+						if (track.track_genre in genres == false) {
+							genres[track.track_genre] = 1
+						}
+						else {
+							genres[track.track_genre] += 1
+						}
+					}
+					genres["other"] = 0
+					genre_length = Object.keys(genres).length
+					for (let [key, value] of Object.entries(genres)) {
+						if (value < 0.1 * genre_length && key != "other") {
+							genres["other"] += value
+							delete(genres[key])
+						}
+					}
+					reorganized_genres = []
+					for (let [key, value] of Object.entries(genres)) {
+						reorganized_genres.push({ "genre": key, "value": value })
+					}
+					genres = reorganized_genres
+					// console.log(genres)
+
+					// Generate new heat map data ------------------------------------
+					let mood = [];
+					let valence = 1;
+					let tempo = 220;
+					while (valence > 0) {
+						while (tempo > 0) {
+							// e.g. the bucket (1, 220, 0) means there are 0 songs with 0.9 < valence <= 1, 210 < tempo <= 220
+							mood.push({ "valence": valence, "tempo": tempo, "value": 0 })
+							tempo -= 10
+							Math.round(tempo)
+						}
+						tempo = 220
+						valence -= 0.1
+						valence = parseFloat(valence.toFixed(2))
+					}
+					// populate heatmap frequencies
+					for (track of data_filtered) {
+						for (box of mood) {
+							// if data falls in range
+							if (	track.track_valence <= box.valence && 
+									track.track_valence > box.valence - 0.1 && 
+									track.track_tempo <= box.tempo && 
+									track.track_tempo > box.tempo - 10) {
+								box.value += 1
+								break
+							}
+						}
+					}
+					// console.log(mood)
+
+					// Update timeline barchart =========================================
+					// Create X scale
+					let timeline_xScale = d3.scaleLinear()
+							.domain([1965, 2022])
+							.range([timeline_p, timeline_w - timeline_p]);
+
+					// Define X axis
+					timeline_xAxis = d3.axisBottom()
+								  .scale(timeline_xScale)
+								  .tickFormat(d3.format(''))
+					
+					// Get histogram data: https://www.d3-graph-gallery.com/graph/histogram_basic.html
+					let histogram = d3.histogram()
+									.value((d)=> { return d.track_year; })
+									.domain(timeline_xScale.domain())
+									.thresholds(timeline_xScale.ticks(20));
+					
+					let bins = histogram(data_filtered);
+					
+					// Create Y scale based on bin length
+					let timeline_yScale = d3.scaleLinear()
+										.range([timeline_h - timeline_p, timeline_p])
+										.domain([0, d3.max(bins, (d)=> { return d.length; })]);
+					
+					// Define Y axis
+					timeline_yAxis = d3.axisLeft()
+								  .scale(timeline_yScale)
+								  .ticks(5);
+					
+					// Create histogram
+					timeline.selectAll("rect")
+						.data(bins)
+						.enter()
+						.append("rect")
+							.attr("x", 1)
+							.attr("transform", (d)=> { return "translate(" + timeline_xScale(d.x0) + "," + timeline_yScale(d.length) + ")"; })
+							.attr("width", (d)=> { return timeline_xScale(d.x1) - timeline_xScale(d.x0) - 1 ; })
+							.attr("height", (d)=> { return timeline_h - timeline_p - timeline_yScale(d.length); })
+							.style("fill", "PaleVioletRed")
+
+					//Create X axis 
+					timeline.append("g")
+						.attr("class", "axis")
+						.attr("transform", "translate(0," + (timeline_h - timeline_p) + ")")
+						.call(timeline_xAxis);
+	   			
+	   				//Create Y axis
+					timeline.append("g")
+						.attr("class", "axis")
+						.attr("transform", "translate(" + timeline_p + ",0)")
+						.call(timeline_yAxis);
+
+					// Create title
+					timeline.append("text")
+						.attr("class", "label")
+						.attr("transform", "translate(60," + timeline_p + ")")
+						.text("When were the songs on this playlist released?")
+						.attr("font-weight", "600");
+
+					// Update explicit piechart =========================================
+					let pie = d3.pie()
+					let colors = ["PaleVioletRed", "Thistle"];
+
+					let arc = d3.arc()
+						.innerRadius(20)
+						.outerRadius(pie_r);
+
+					//Set up groups
+					let arcs = pie_explicit.selectAll("g.arcs")
+						  .data(pie([explicit_true, explicit_false]))
+						  .enter()
+						  .append("g")
+						  .attr("class", "arc")
+						  .attr("transform", "translate(" + (pie_r + pie_p) + "," + (pie_r + pie_p) + ")");
+
+					// Create piechart
+					//Draw arc paths
+					arcs.append("path")
+						.attr("fill", (d, i)=> {
+							return colors[i];
+						})
+						.attr("d", arc);
+					
+					//Labels
+					pie_explicit.append("text")
+						.attr("transform", (d)=> {
+							return "translate(0, 0)";
+						})
+						.attr("fill", "PaleVioletRed")
+						.attr("font-size", "16px")
+						.attr("font-weight", "600")
+						.text("* explicit")
+
+					//Labels
+					pie_explicit.append("text")
+						.attr("transform", (d)=> {
+							return "translate(0, 16)";
+						})
+						.attr("fill", "Thistle")
+						.attr("font-size", "16px")
+						.attr("font-weight", "600")
+						.text("* not explicit")
+					
+					//Labels
+					arcs.append("text")
+						.attr("transform", (d)=> {
+							return "translate(" + arc.centroid(d) + ")";
+						})
+						.attr("text-anchor", "middle")
+						.text((d)=> {
+							return d.value;
+						})
+						.attr("fill", "white");
+
+					// Update genre piechart =========================================
+					let color = d3.scaleOrdinal(d3.schemeTableau10)
+					let pie2 = d3.pie()
+									.value(function(d) { return d.value; })
+					//Set up groups
+					arcs = pie_genre.selectAll("g.arcs")
+							.data(pie2(genres))
+							.enter()
+							.append("g")
+							.attr("class", "arc")
+							.attr("transform", "translate(" + (pie_r + pie_p) + "," + (pie_r + pie_p) + ")");
+					
+					// Create piechart
+					let arc2 = d3.arc()
+						.innerRadius(pie_r * 0.5)
+						.outerRadius(pie_r * 0.8)
+
+					// Draw arc paths
+					arcs.append("path")
+						.attr("fill", (d, i)=> {
+							return color(i);
+						})
+						.attr("d", arc2)
+					
+					let labelArc = d3.arc()
+						.innerRadius(pie_r * 0.9)
+						.outerRadius(pie_r * 0.9)
+					
+					// Value labels
+					arcs.append("text")
+						.attr("transform", (d)=> {
+							return "translate(" + arc.centroid(d) + ")";
+						})
+						.attr("text-anchor", "middle")
+						.text((d)=> {
+							return d.value;
+						})
+						.attr("fill", "white")
+						.attr("font-size", "10px");;
+					
+					// Genre labels
+					arcs.selectAll('labels')
+						.data(pie2(genres))
+						.enter()
+						.append('text')
+							.text( (d)=> { return d.data.genre } )
+							.attr("fill", (d, i)=> { return color(i) } )
+							.attr("font-size", "12px")
+							.attr('transform', (d)=> { return 'translate(' + labelArc.centroid(d) + ')'; })
+							.style('text-anchor', function(d) {
+								let midangle = d.startAngle + (d.endAngle - d.startAngle) / 2
+								return (midangle < Math.PI ? 'start' : 'end')
+							})
+
+					// Title
+					pie_genre.append("text")
+						.attr("transform", (d)=> {
+							return "translate(0, 0)";
+						})
+						.attr("fill", "#900C3F")
+						.attr("font-size", "16px")
+						.attr("font-weight", "600")
+						.text("Songs by genre")
+
+					// Update mood heatmap =========================================
+
+					// X scales and axis:
+					let heatmap_xScale = d3.scaleBand()
+								.domain([10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220])
+								.range([ heatmap_plr, heatmap_w - heatmap_plr ])
+								.padding(0.05);
+					heatmap.append("g")
+								.attr("class", "label")
+								.attr("transform", "translate(0," + (heatmap_h - heatmap_ptb) + ")")
+								.call(d3.axisBottom(heatmap_xScale))
+
+					// Y scales and axis:
+					let heatmap_yScale = d3.scaleBand()
+								.domain([.1, .2, .3, .4, .5, .6, .7, .8, .9, 1])
+								.range([ heatmap_h - heatmap_ptb, heatmap_ptb ])
+								.padding(0.05);
+					heatmap.append("g")
+								.attr("class", "label")
+								.attr("transform", "translate(" + heatmap_plr + ",0)")
+								.call(d3.axisLeft(heatmap_yScale));
+
+					// Color scale
+					let heatmap_color = d3.scaleSequential()
+											.interpolator(d3.interpolateRdPu)
+											.domain([0, d3.max(mood, (d)=> { return parseInt(d.value) })])
+
+					// Create heatmap
+					heatmap.selectAll("heatmap-boxes")
+						.data(mood)
+						.enter()
+						.append("rect")
+						.attr("x", (d)=> { console.log(d)
+							return heatmap_xScale(d.tempo) })
+						.attr("y", (d)=> { return heatmap_yScale(d.valence) })
+						.attr("width", heatmap_xScale.bandwidth())
+						.attr("height", heatmap_yScale.bandwidth())
+						.attr("fill", (d)=> { return heatmap_color(d.value)} )
+						.attr('rx', 2)
+					
+					// Vertical label
+					heatmap.append("text")
+							.attr("x", 50)
+							.attr("y", 55)
+							.attr("text-anchor", "left")
+							.style("font-size", "12px")
+							.style("fill", "grey")
+							.text("Happier music");
+					
+					// Horizontal label
+					heatmap.append("text")
+							.attr("x", heatmap_w - heatmap_plr - 80)
+							.attr("y", heatmap_h - heatmap_ptb - 10)
+							.attr("text-anchor", "left")
+							.style("font-size", "12px")
+							.style("max-width", 60)
+							.style("fill", "grey")
+							.text("Faster music");
+
+					// Title
+					heatmap.append("text")
+							.attr("x", 300)
+							.attr("y", 30)
+							.attr("text-anchor", "left")
+							.style("font-size", "16px")
+							.style("font-weight", 600)
+							.text("What is the mood of my playlist?");
+
+					// Axis labels
+					heatmap.append("text")
+						.attr("class", "label")
+						.attr("transform", "translate(0, 160) rotate(-90)")
+						.style("font-size", "12px")
+						.text("Valence (Happiness)");
+					heatmap.append("text")
+						.attr("class", "label")
+						.attr("transform", "translate(275, 215)")
+						.style("font-size", "12px")
+						.text("Tempo (BPM)");
+								
+				});
+			});
+
+		</script>
+	</body>
+</html>
