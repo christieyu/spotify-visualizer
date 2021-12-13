@@ -9,8 +9,8 @@ import spotipy.util as util
 import csv
 
 username = 'fabuloxide'
-client_id ='f411a63b1fb44971b19d18aaac431a6f'
-client_secret = '77072acfd8e04edcbd284c012801063b'
+client_id = [CLIENT_ID]
+client_secret = [CLIENT_SECRET]
 redirect_uri = 'http://localhost:7777/callback'
 scope = 'user-read-private'
 
@@ -23,7 +23,7 @@ token = util.prompt_for_user_token(username=username,
 sp = spotipy.Spotify(auth=token)
 
 # name of csv file 
-filename = "spotify_data1.csv"
+filename = "spotify_data.csv"
 
 def get_playlist_tracks(username, playlist_id):
     results = sp.user_playlist_tracks(username, playlist_id)
@@ -42,7 +42,7 @@ with open(filename, 'w') as csvfile:
     csvwriter.writerow(['playlist_id', 'playlist_year', 'playlist_month', 'playlist_week', 'track_id', 'track_year', 'track_genre', 'track_explicit', 'track_valence', 'track_tempo']) 
 
     # get each playlist
-    playlists = sp.user_playlists(username, 50, 54)["items"]
+    playlists = sp.user_playlists(username, 50, 0)["items"]
     playlist_year = 2020
     for playlist in playlists:
         playlist_data = []
@@ -85,12 +85,3 @@ with open(filename, 'w') as csvfile:
             playlist_year -= 1
         # writing the data rows 
         csvwriter.writerows(playlist_data)
-
-# playlists = sp.user_playlists(username, 1, 0)
-# playlist = playlists["items"][0]["id"]
-
-# tracks = sp.playlist_items(playlist)
-# for track in tracks["items"]:
-#     print(track["track"]["name"])
-#     print (sp.audio_analysis(track["track"]["id"]))
-#     break
