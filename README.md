@@ -1,7 +1,7 @@
 # spotify-visualizer
 Final assignment for CPSC 446 (Data Visualization) at Yale. This application visualizes data from my past year of Spotify playlists using D3, a JavaScript package.
 
-You can see a quick view of my project hosted here: `https://christieyu.com/spotify-visualizer/spotify`
+You can see a quick view of my project hosted [here](https://christieyu.com/spotify-visualizer/spotify).
 
 ![alt text](spotify-vis.png)
 
